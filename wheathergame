@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 날씨 - 보드게임</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-sun: #ff9f43;
+            --card-rain: #54a0ff;
+            --card-wind: #1dd1a1;
+            --card-lightning: #5f27cd;
+            --card-hybrid: #ff6b6b;
+        }
+
+        body {
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #scaler {
+            transform-origin: center center;
+            transition: transform 0.2s;
+        }
+
+        /* === 시작 화면 === */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 200;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            border: 5px solid #000;
+        }
+        .title-box {
+            font-size: 48px; font-weight: bold; margin-bottom: 40px;
+            text-shadow: 3px 3px 0px #aaa;
+        }
+        .menu-btn {
+            width: 200px; padding: 15px; margin: 10px;
+            font-size: 18px; font-weight: bold;
+            background: white; border: 2px solid black;
+            cursor: pointer; box-shadow: 4px 4px 0px #000;
+            transition: transform 0.1s;
+        }
+        .menu-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #000; }
+        .footer { margin-top: 50px; font-size: 12px; color: #666; }
+
+        /* === 게임 컨테이너 === */
+        #game-container {
+            width: 900px; height: 600px;
+            background: white; border: 2px solid #000;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            grid-template-rows: 60px 1fr 140px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            position: relative; display: none;
+        }
+
+        header {
+            grid-column: 1 / -1; border-bottom: 2px solid #000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 20px; background: #eee; font-weight: bold;
+        }
+
+        #board-area {
+            grid-column: 1 / 2; grid-row: 2 / 3;
+            position: relative; background-color: #fff;
+            padding: 20px; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+
+        #status-display {
+            position: absolute; top: 10px; right: 10px;
+            width: 80px; height: 100px;
+            border: 2px solid #333; border-radius: 8px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            font-size: 12px; text-align: center;
+            background: #dfe6e9; box-shadow: 2px 2px 0px #000;
+        }
+        #status-icon { font-size: 30px; margin-bottom: 5px; }
+
+        #play-zone {
+            width: 100%; height: 300px;
+            background: rgba(255, 234, 167, 0.3);
+            border: 2px dashed #b2bec3; border-radius: 10px;
+            display: flex; justify-content: center; align-items: center;
+            gap: 40px; position: relative;
+        }
+
+        /* 카드 */
+        .card {
+            width: 70px; height: 100px;
+            border: 2px solid #000; border-radius: 5px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            font-weight: bold; font-size: 12px;
+            cursor: pointer; transition: transform 0.2s;
+            background: white; box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+            position: relative; z-index: 10;
+        }
+        .card:hover { transform: translateY(-5px); }
+        .card.selected { border: 3px solid red; transform: translateY(-10px); }
+        .card-face { font-size: 24px; margin-bottom: 5px; }
+        .card-name { font-size: 10px; text-align: center; word-break: keep-all;}
+        .card-sub { font-size: 10px; color: #fff; background: rgba(0,0,0,0.5); padding: 2px; border-radius: 4px; margin-top: 2px; }
+        .card.back { background: #636e72; color: #b2bec3; }
+        .card.back .card-face { content: "❓"; }
+
+        .type-sun { background: var(--card-sun); color: white; }
+        .type-rain { background: var(--card-rain); color: white; }
+        .type-wind { background: var(--card-wind); color: white; }
+        .type-lightning { background: var(--card-lightning); color: white; }
+        .type-hybrid { background: var(--card-hybrid); color: white; }
+
+        /* 변환 배지 (복합 카드용) */
+        .convert-badge {
+            position: absolute; top: -10px; right: -10px;
+            background: #2d3436; color: #fff;
+            font-size: 10px; padding: 3px 6px; border-radius: 10px;
+            border: 1px solid #fff; box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+            z-index: 20; white-space: nowrap;
+        }
+
+        /* 봇 슬롯 */
+        .bot-card-slot {
+            display: flex; flex-direction: column; align-items: center;
+            font-size: 12px; font-weight: bold; position: relative;
+            width: 80px;
+        }
+
+        /* 채팅 스택 */
+        .chat-stack {
+            position: absolute; bottom: 115px; left: 50%; transform: translateX(-50%);
+            display: flex; flex-direction: column-reverse;
+            align-items: center; width: 250px; height: 150px;
+            pointer-events: none; overflow: hidden; z-index: 50;
+        }
+        .chat-bubble {
+            background: white; border: 2px solid black;
+            padding: 5px 10px; border-radius: 15px;
+            font-weight: bold; font-size: 12px;
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.2);
+            margin-bottom: 5px; animation: popUp 0.3s ease-out;
+            white-space: nowrap; pointer-events: auto;
+        }
+        .chat-sender { font-size: 10px; color: #666; margin-right: 5px; }
+        @keyframes popUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 리더 말풍선 */
+        #leader-bubble {
+            position: absolute; top: -40px;
+            background: #fff700; border: 2px solid black;
+            padding: 8px 15px; border-radius: 20px;
+            font-weight: bold; box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+            z-index: 20;
+        }
+
+        /* 로그 */
+        #log-area {
+            grid-column: 2 / 3; grid-row: 2 / 4;
+            border-left: 2px solid #000; background: #2d3436;
+            color: #dfe6e9; padding: 10px; overflow-y: auto;
+            font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.4;
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 2px; }
+        .log-turn { color: #ffeaa7; font-weight: bold; margin-top: 10px; border-top: 1px dashed #666; padding-top:5px; }
+        .log-system { color: #81ecec; }
+        .log-danger { color: #ff7675; font-weight: bold; }
+        .log-success { color: #55efc4; font-weight: bold; }
+
+        /* 플레이어 영역 */
+        #player-area {
+            grid-column: 1 / 2; grid-row: 3 / 4;
+            border-top: 2px solid #000;
+            display: flex; flex-direction: column;
+            justify-content: center; padding: 10px 20px;
+            background: #fff; position: relative;
+        }
+        #hand-container { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        #my-hand { display: flex; gap: 10px; }
+        #controls { display: flex; gap: 10px; }
+        
+        #emote-bar { display: flex; gap: 5px; margin-bottom: 5px; }
+        .emote-btn {
+            background: none; border: 1px solid #ccc; cursor: pointer;
+            font-size: 16px; padding: 2px 5px; border-radius: 5px;
+        }
+        .emote-btn:hover { background: #eee; }
+
+        button {
+            padding: 10px 20px; border: 2px solid #000;
+            background: #fff; font-weight: bold; cursor: pointer;
+            box-shadow: 2px 2px 0px #000;
+        }
+        button:active { transform: translate(2px, 2px); box-shadow: none; }
+        button:disabled { background: #ccc; color: #666; cursor: not-allowed; box-shadow: none; }
+
+        /* 애니메이션 */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake-screen { animation: shake 0.5s; background-color: rgba(255, 0, 0, 0.1) !important; }
+
+        /* 모달 */
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none;
+            justify-content: center; align-items: center; z-index: 100;
+        }
+        #modal-box {
+            background: white; padding: 20px; border: 2px solid black;
+            text-align: center; width: 300px; box-shadow: 5px 5px 0px #000;
+        }
+        .choice-btn { margin: 5px; padding: 8px 15px; cursor: pointer; }
+
+        /* 튜토리얼 오버레이 */
+        #tutorial-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 150;
+            display: none; pointer-events: none;
+        }
+        #tutorial-msg {
+            position: absolute; background: white; border: 2px solid red;
+            padding: 15px; border-radius: 10px; font-weight: bold;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            pointer-events: auto; max-width: 300px; text-align: center;
+        }
+        .highlight { z-index: 160; position: relative; box-shadow: 0 0 15px yellow; background: rgba(255,255,255,0.9); }
+
+    </style>
+</head>
+<body>
+
+<div id="scaler">
+    <div id="start-screen">
+        <div class="title-box">🌤️ 오늘의 날씨</div>
+        <button class="menu-btn" onclick="startGame()">게임 시작</button>
+        <button class="menu-btn" onclick="startTutorial()">게임 배우기</button>
+        <div class="footer">제작자 : gunlee41@kakao.com</div>
+    </div>
+
+    <div id="game-container">
+        <header>
+            <div>오늘의 날씨 🌤️</div>
+            <div id="round-info">Round 1 / 4</div>
+            <div id="score-info">나: 0 | 봇1: 0 | 봇2: 0 | 봇3: 0</div>
+        </header>
+
+        <div id="board-area">
+            <div id="status-display">
+                <div id="status-icon">😐</div>
+                <div id="status-text">평온</div>
+                <div id="status-desc" style="font-size:9px; color:#666;">효과 없음</div>
+            </div>
+
+            <div id="play-zone">
+                <div class="bot-card-slot" id="slot-bot1">
+                    <div class="chat-stack" id="chat-bot1"></div>
+                    <span>Bot 1</span><div class="card back"></div>
+                </div>
+                <div class="bot-card-slot" id="slot-bot2">
+                    <div class="chat-stack" id="chat-bot2"></div>
+                    <span>Bot 2</span><div class="card back"></div>
+                </div>
+                <div class="bot-card-slot" id="slot-bot3">
+                    <div class="chat-stack" id="chat-bot3"></div>
+                    <span>Bot 3</span><div class="card back"></div>
+                </div>
+                <div id="leader-bubble" style="display:none;"></div>
+            </div>
+            <div id="center-message" style="margin-top: 10px; font-weight:bold; color:#d63031; height: 20px;"></div>
+        </div>
+
+        <div id="log-area"></div>
+
+        <div id="player-area">
+            <div class="chat-stack" id="chat-me" style="bottom: 100%; left: 50%; transform: translateX(-50%);"></div>
+
+            <div id="emote-bar">
+                <button class="emote-btn" onclick="sendEmote(0, '😀')">😀</button>
+                <button class="emote-btn" onclick="sendEmote(0, '🤔')">🤔</button>
+                <button class="emote-btn" onclick="sendEmote(0, '😱')">😱</button>
+                <button class="emote-btn" onclick="sendEmote(0, '😡')">😡</button>
+                <button class="emote-btn" onclick="sendEmote(0, '👍')">👍</button>
+            </div>
+            <div id="hand-container">
+                <div id="my-hand"></div>
+                <div id="controls">
+                    <button id="btn-submit" onclick="submitCard()">카드 내기</button>
+                    <button id="btn-next" onclick="nextPhase()" disabled>다음</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modal-overlay">
+    <div id="modal-box">
+        <h3>어떤 날씨를 원해?</h3>
+        <p>리더로서 원하는 날씨를 선언하세요.</p>
+        <div id="modal-choices"></div>
+    </div>
+</div>
+
+<div id="tutorial-overlay">
+    <div id="tutorial-msg"></div>
+</div>
+
+<script>
+    /* === 화면 스케일링 === */
+    function resizeGame() {
+        const scaler = document.getElementById('scaler');
+        const scale = Math.min(window.innerWidth / 900, window.innerHeight / 600, 1);
+        scaler.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeGame);
+    window.addEventListener('load', resizeGame);
+
+    /* === 사운드 === */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const SFX = {
+        CLICK: () => playTone(800, 'sine', 0.05),
+        CARD: () => playTone(400, 'triangle', 0.1),
+        WIN: () => { playTone(523, 'sine', 0.1); setTimeout(()=>playTone(659, 'sine', 0.1), 100); setTimeout(()=>playTone(784, 'sine', 0.2), 200); },
+        LOSE: () => { playTone(300, 'sawtooth', 0.2); setTimeout(()=>playTone(200, 'sawtooth', 0.4), 200); },
+        LIGHTNING: () => { playNoise(0.5); }
+    };
+
+    function playTone(freq, type, duration) {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function playNoise(duration) {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.5;
+        noise.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    }
+
+    /* === 데이터 === */
+    const CARD_TYPES = {
+        SUN: { name: '해', icon: '☀️', color: 'type-sun' },
+        RAIN: { name: '비', icon: '☔', color: 'type-rain' },
+        WIND: { name: '바람', icon: '🍃', color: 'type-wind' },
+        LIGHTNING: { name: '번개', icon: '⚡', color: 'type-lightning' },
+        HYBRID: { name: '복합', icon: '🌈', color: 'type-hybrid' }
+    };
+
+    const STATUS_EFFECTS = {
+        NORMAL: { name: '평온', icon: '😐', desc: '효과 없음' },
+        HOT: { name: '더워', icon: '🥵', desc: '바람 승리 시 +1점' },
+        HUMID: { name: '습해', icon: '💧', desc: '해 승리 시 +1점' },
+        COLD: { name: '추워', icon: '🥶', desc: '해 승리 시 +1점' },
+        SCARY: { name: '무서워', icon: '😱', desc: '승리자 전원 +1점' }
+    };
+
+    const FULL_DECK_TEMPLATE = [
+        ...Array(4).fill({ type: 'SUN', name: '해' }),
+        ...Array(4).fill({ type: 'RAIN', name: '비' }),
+        ...Array(4).fill({ type: 'WIND', name: '바람' }),
+        { type: 'HYBRID', subType: ['SUN', 'RAIN'], name: '여우비', unsafe: false },
+        { type: 'HYBRID', subType: ['SUN', 'WIND'], name: '적절한 여름', unsafe: false },
+        { type: 'HYBRID', subType: ['RAIN', 'WIND'], name: '비바람', unsafe: false },
+        { type: 'HYBRID', subType: ['SUN', 'LIGHTNING'], name: '마른하늘 날벼락', unsafe: true },
+        { type: 'HYBRID', subType: ['RAIN', 'LIGHTNING'], name: '뇌우', unsafe: true },
+        { type: 'HYBRID', subType: ['WIND', 'LIGHTNING'], name: '돌풍', unsafe: true },
+        ...Array(2).fill({ type: 'LIGHTNING', name: '번개' })
+    ];
+
+    let gameState = {
+        mode: 'TITLE',
+        round: 1, maxRounds: 4, // 4라운드로 수정 (모두 한 번씩 리더)
+        players: [],
+        leaderIndex: 0,
+        currentStatus: 'NORMAL',
+        playedCards: [],
+        phase: 'READY',
+        deck: [],
+        leaderReq: null
+    };
+
+    let selectedHandIndex = -1;
+    let tutorialStep = 0;
+    let botTimer = null;
+
+    /* === 초기화 === */
+    function startGame() {
+        SFX.CLICK();
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'grid';
+        resizeGame();
+        gameState.mode = 'GAME';
+        gameState.round = 1;
+        gameState.maxRounds = 4; // 4라운드 설정
+        gameState.currentStatus = 'NORMAL';
+        
+        gameState.players = [
+            { id: 0, name: '나', isBot: false, hand: [], score: 0 },
+            { id: 1, name: '봇1', isBot: true, hand: [], score: 0 },
+            { id: 2, name: '봇2', isBot: true, hand: [], score: 0 },
+            { id: 3, name: '봇3', isBot: true, hand: [], score: 0 }
+        ];
+        
+        log("게임이 시작되었습니다.", "system");
+        startRound();
+    }
+
+    function startTutorial() {
+        SFX.CLICK();
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'grid';
+        resizeGame();
+        gameState.mode = 'TUTORIAL';
+        
+        gameState.players = [
+            { id: 0, name: '나', isBot: false, hand: [], score: 0 },
+            { id: 1, name: '봇1', isBot: true, hand: [], score: 0 },
+            { id: 2, name: '봇2', isBot: true, hand: [], score: 0 },
+            { id: 3, name: '봇3', isBot: true, hand: [], score: 0 }
+        ];
+        
+        runTutorial();
+    }
+
+    function shuffle(array) { return array.sort(() => Math.random() - 0.5); }
+    function createDeck() { return shuffle(JSON.parse(JSON.stringify(FULL_DECK_TEMPLATE))); }
+    
+    function log(msg, type = '') {
+        const logArea = document.getElementById('log-area');
+        const div = document.createElement('div');
+        div.className = `log-entry log-${type}`;
+        div.innerText = msg;
+        logArea.appendChild(div);
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    /* === UI 업데이트 === */
+    function updateUI() {
+        document.getElementById('round-info').innerText = `Round ${gameState.round} / ${gameState.maxRounds}`;
+        let scoreText = gameState.players.map(p => `${p.name}: ${p.score}`).join(' | ');
+        document.getElementById('score-info').innerText = scoreText;
+
+        const status = STATUS_EFFECTS[gameState.currentStatus];
+        document.getElementById('status-icon').innerText = status.icon;
+        document.getElementById('status-text').innerText = status.name;
+        document.getElementById('status-desc').innerText = status.desc;
+
+        const handDiv = document.getElementById('my-hand');
+        handDiv.innerHTML = '';
+        gameState.players[0].hand.forEach((card, idx) => {
+            const cardEl = createCardElement(card);
+            if (idx === selectedHandIndex) cardEl.classList.add('selected');
+            cardEl.onclick = () => {
+                SFX.CLICK();
+                if (gameState.phase === 'LEADER_ACT' || gameState.phase === 'FOLLOWER_ACT') {
+                    selectedHandIndex = idx;
+                    updateUI();
+                }
+            };
+            handDiv.appendChild(cardEl);
+        });
+
+        const submitBtn = document.getElementById('btn-submit');
+        const nextBtn = document.getElementById('btn-next');
+        
+        if (gameState.phase === 'LEADER_ACT' && gameState.players[gameState.leaderIndex].id === 0) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "리더: 카드 내기";
+        } else if (gameState.phase === 'FOLLOWER_ACT' && !hasPlayerPlayed(0)) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "카드 내기";
+        } else {
+            submitBtn.disabled = true;
+        }
+
+        nextBtn.disabled = (gameState.phase !== 'RESOLVE');
+        if(gameState.phase === 'RESOLVE') {
+            nextBtn.innerText = "다음 라운드";
+            nextBtn.onclick = nextPhase;
+        }
+    }
+
+    function createCardElement(card, isBack = false, effectiveType = null) {
+        const div = document.createElement('div');
+        div.className = `card ${isBack ? 'back' : ''} ${!isBack ? CARD_TYPES[card.type].color : ''}`;
+        
+        if (!isBack) {
+            const icon = document.createElement('div');
+            icon.className = 'card-face';
+            icon.innerText = CARD_TYPES[card.type].icon;
+            
+            const name = document.createElement('div');
+            name.className = 'card-name';
+            name.innerText = card.name;
+            div.appendChild(icon);
+            div.appendChild(name);
+
+            if (card.type === 'HYBRID') {
+                const sub = document.createElement('div');
+                sub.className = 'card-sub';
+                sub.innerText = `${CARD_TYPES[card.subType[0]].icon}+${CARD_TYPES[card.subType[1]].icon}`;
+                div.appendChild(sub);
+            }
+
+            if (effectiveType && effectiveType !== card.type) {
+                const badge = document.createElement('div');
+                badge.className = 'convert-badge';
+                badge.innerText = `${CARD_TYPES[effectiveType].icon}로 변환됨`;
+                div.appendChild(badge);
+            }
+        } else {
+            const icon = document.createElement('div');
+            icon.className = 'card-face';
+            icon.innerText = "❓";
+            div.appendChild(icon);
+        }
+        return div;
+    }
+
+    function hasPlayerPlayed(pid) { return gameState.playedCards.some(pc => pc.playerId === pid); }
+
+    /* === 이모지 시스템 === */
+    function sendEmote(pid, emoji) {
+        if (pid === 0) {
+            SFX.CLICK();
+            setTimeout(() => botReact('THINK'), 500);
+        }
+        
+        let stackId = pid === 0 ? 'chat-me' : `chat-bot${pid}`;
+        const stack = document.getElementById(stackId);
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.innerHTML = `<span class="chat-sender">${gameState.players[pid].name}</span> ${emoji}`;
+        
+        stack.prepend(bubble);
+        setTimeout(() => {
+            bubble.style.opacity = '0';
+            setTimeout(() => bubble.remove(), 300);
+        }, 3000);
+    }
+
+    function botReact(type) {
+        const emojis = {
+            WIN: ['😀', '😎', '🎉', '🌞'],
+            LOSE: ['😭', '😡', '😱', '☔'],
+            LIGHTNING: ['⚡', '💀', '🥶', '⛈️'],
+            THINK: ['🤔', '...', '👀', '👍', '👋']
+        };
+        
+        gameState.players.forEach(p => {
+            if(p.isBot && Math.random() > 0.4) {
+                const list = emojis[type];
+                const pick = list[Math.floor(Math.random() * list.length)];
+                setTimeout(() => sendEmote(p.id, pick), Math.random() * 1500);
+            }
+        });
+    }
+
+    /* === 게임 로직 === */
+    function startRound() {
+        if(gameState.mode === 'TUTORIAL') return;
+        if(botTimer) clearTimeout(botTimer);
+
+        gameState.deck = createDeck();
+        gameState.playedCards = [];
+        selectedHandIndex = -1;
+        
+        gameState.players.forEach(p => {
+            p.hand = [gameState.deck.pop(), gameState.deck.pop(), gameState.deck.pop()];
+        });
+
+        gameState.leaderIndex = (gameState.round - 1) % 4;
+        const leader = gameState.players[gameState.leaderIndex];
+
+        log(`=== Round ${gameState.round} 시작 ===`, 'turn');
+        log(`이번 라운드 리더: [${leader.name}]`);
+
+        document.querySelectorAll('.bot-card-slot .card').forEach(el => el.remove());
+        document.querySelectorAll('.bot-card-slot').forEach(slot => {
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'card back';
+            slot.appendChild(cardDiv);
+        });
+        
+        document.getElementById('leader-bubble').style.display = 'none';
+        document.getElementById('center-message').innerText = "";
+
+        gameState.phase = 'LEADER_ACT';
+        updateUI();
+
+        if (leader.isBot) {
+            botTimer = setTimeout(botLeaderPlay, 1000);
+        }
+    }
+
+    function botLeaderPlay() {
+        if(gameState.phase !== 'LEADER_ACT') return;
+        const bot = gameState.players[gameState.leaderIndex];
+        let cardIdx = bot.hand.findIndex(c => ['SUN', 'RAIN', 'WIND'].includes(c.type));
+        if (cardIdx === -1) cardIdx = 0;
+
+        const card = bot.hand[cardIdx];
+        let declareType = card.type;
+        if (card.type === 'HYBRID') declareType = card.subType[0];
+        if (card.type === 'LIGHTNING') declareType = 'SUN';
+
+        playCardAction(bot.id, cardIdx, declareType);
+    }
+
+    function playCardAction(pid, cardIdx, declaredType = null) {
+        SFX.CARD();
+        const player = gameState.players[pid];
+        const card = player.hand.splice(cardIdx, 1)[0];
+        
+        gameState.playedCards.push({ playerId: pid, card: card, declaredType: declaredType });
+
+        const isLeader = (pid === gameState.leaderIndex);
+        if (pid !== 0) {
+            const slot = document.getElementById(`slot-bot${pid}`);
+            const oldCard = slot.querySelector('.card');
+            if(oldCard) oldCard.remove();
+            slot.appendChild(createCardElement(card, !isLeader));
+        }
+
+        if (isLeader) {
+            log(`${player.name}(리더)가 카드를 냈습니다.`);
+            showBubble(`나는 [${CARD_TYPES[declaredType].name}] 날씨가 좋아!`);
+            gameState.leaderReq = declaredType;
+            gameState.phase = 'FOLLOWER_ACT';
+            
+            if (pid === 0) {
+                botTimer = setTimeout(botsFollow, 1000);
+            } else {
+                botTimer = setTimeout(() => botsFollow(true), 800);
+            }
+        } else {
+            if (gameState.playedCards.length === 4) {
+                gameState.phase = 'RESOLVE';
+                log("모든 플레이어가 카드를 냈습니다.", "system");
+                updateUI();
+            }
+        }
+        updateUI();
+    }
+
+    function showBubble(text) {
+        const bubble = document.getElementById('leader-bubble');
+        bubble.innerText = text;
+        bubble.style.display = 'block';
+    }
+
+    function botsFollow(excludePlayer = false) {
+        const botsToPlay = gameState.players.filter(p => p.isBot && p.id !== gameState.leaderIndex && !hasPlayerPlayed(p.id));
+        
+        let delay = 0;
+        botsToPlay.forEach(bot => {
+            delay += 800;
+            botTimer = setTimeout(() => {
+                let target = gameState.leaderReq;
+                let pickIdx = bot.hand.findIndex(c => c.type === target);
+                if (pickIdx === -1) pickIdx = bot.hand.findIndex(c => c.type === 'HYBRID' && c.subType.includes(target));
+                if (pickIdx === -1) pickIdx = Math.floor(Math.random() * bot.hand.length);
+                
+                const lightningIdx = bot.hand.findIndex(c => c.type === 'LIGHTNING');
+                if (lightningIdx !== -1 && Math.random() < 0.1) pickIdx = lightningIdx;
+
+                playCardAction(bot.id, pickIdx);
+            }, delay);
+        });
+    }
+
+    function submitCard() {
+        if (selectedHandIndex === -1) {
+            alert("낼 카드를 선택해주세요.");
+            return;
+        }
+        const myCard = gameState.players[0].hand[selectedHandIndex];
+
+        if (gameState.phase === 'LEADER_ACT') {
+            openDeclarationModal(myCard);
+        } else {
+            playCardAction(0, selectedHandIndex);
+            
+            if(gameState.mode === 'TUTORIAL' && tutorialStep === 2) {
+                document.getElementById('tutorial-overlay').style.display = 'block';
+                tutorialStep = 3;
+                runTutorial();
+                return;
+            }
+
+            botTimer = setTimeout(botsFollow, 500);
+        }
+    }
+
+    function openDeclarationModal(card) {
+        const modal = document.getElementById('modal-overlay');
+        const choicesDiv = document.getElementById('modal-choices');
+        choicesDiv.innerHTML = '';
+
+        let options = [];
+        if (card.type === 'HYBRID') options = card.subType;
+        else if (card.type === 'LIGHTNING') options = ['SUN', 'RAIN', 'WIND'];
+        else options = [card.type];
+
+        options.forEach(type => {
+            const btn = document.createElement('button');
+            btn.className = 'choice-btn';
+            btn.innerText = CARD_TYPES[type].name;
+            btn.onclick = () => {
+                SFX.CLICK();
+                modal.style.display = 'none';
+                playCardAction(0, selectedHandIndex, type);
+                
+                if(gameState.mode === 'TUTORIAL' && tutorialStep === 2) {
+                    document.getElementById('tutorial-overlay').style.display = 'block';
+                    tutorialStep = 3;
+                    runTutorial();
+                }
+            };
+            choicesDiv.appendChild(btn);
+        });
+        modal.style.display = 'flex';
+    }
+
+    function nextPhase() {
+        SFX.CLICK();
+        
+        if (gameState.mode === 'TUTORIAL') {
+            alert("튜토리얼을 마쳤습니다! 이제 실전입니다.");
+            location.reload();
+            return;
+        }
+
+        if (gameState.phase !== 'RESOLVE') return;
+
+        const playZone = document.getElementById('play-zone');
+        document.getElementById('leader-bubble').style.display = 'block';
+        document.getElementById('leader-bubble').innerText = `나는 [${CARD_TYPES[gameState.leaderReq].name}] 날씨가 좋아!`;
+
+        const leaderPlay = gameState.playedCards.find(p => p.playerId === gameState.leaderIndex);
+        const followersPlay = gameState.playedCards.filter(p => p.playerId !== gameState.leaderIndex);
+
+        const result = calculateResult(leaderPlay, followersPlay);
+
+        [leaderPlay, ...followersPlay].forEach(p => {
+            if(p.playerId !== 0) {
+                const slot = document.getElementById(`slot-bot${p.playerId}`);
+                const oldCard = slot.querySelector('.card');
+                if(oldCard) oldCard.remove();
+                
+                let effective = null;
+                const matchInfo = result.effectiveTypes.find(e => e.pid === p.playerId);
+                if(matchInfo) effective = matchInfo.type;
+
+                slot.appendChild(createCardElement(p.card, false, effective));
+            }
+        });
+
+        gameState.round++;
+        if (gameState.round > gameState.maxRounds) {
+            gameState.phase = 'END';
+            setTimeout(endGame, 3000);
+        } else {
+            gameState.phase = 'READY';
+            document.getElementById('btn-next').innerText = "다음 라운드";
+            document.getElementById('btn-next').onclick = startRound;
+        }
+    }
+
+    function calculateResult(leaderPlay, followersPlay) {
+        const allCards = [leaderPlay, ...followersPlay];
+        let msg = "";
+        let winners = [];
+        let scoreGain = 0;
+        let nextStatus = 'NORMAL';
+        let effectiveTypes = [];
+
+        const realLightningCount = allCards.filter(p => p.card.type === 'LIGHTNING').length;
+        let totalLightningCount = realLightningCount;
+        if (realLightningCount > 0) {
+            totalLightningCount += allCards.filter(p => p.card.unsafe).length;
+        }
+
+        if (totalLightningCount >= 2) {
+            SFX.LIGHTNING();
+            document.body.classList.add('shake-screen');
+            setTimeout(() => document.body.classList.remove('shake-screen'), 500);
+            msg = "⚡ 콰광! 번개가 쳐서 날씨가 엉망이 되었습니다!";
+            log(msg, 'danger');
+            allCards.forEach(p => {
+                if (p.card.type === 'LIGHTNING' || (realLightningCount > 0 && p.card.unsafe)) {
+                    gameState.players[p.playerId].score -= 1;
+                }
+            });
+            nextStatus = 'SCARY';
+            botReact('LIGHTNING');
+        } else {
+            const reqType = leaderPlay.declaredType;
+            const leaderCardType = leaderPlay.card.type;
+
+            if (['SUN', 'RAIN', 'WIND', 'LIGHTNING'].includes(leaderCardType)) {
+                let matchCount = 1;
+                let matchPlayers = [leaderPlay.playerId];
+                
+                followersPlay.forEach(p => {
+                    let isMatch = false;
+                    let eff = p.card.type;
+
+                    if (p.card.type === reqType) isMatch = true;
+                    if (p.card.type === 'HYBRID' && p.card.subType.includes(reqType)) {
+                        isMatch = true;
+                        eff = reqType;
+                    }
+                    
+                    if (isMatch) { 
+                        matchCount++; 
+                        matchPlayers.push(p.playerId);
+                        effectiveTypes.push({ pid: p.playerId, type: eff });
+                    }
+                });
+
+                if (matchCount >= 3) {
+                    SFX.WIN();
+                    msg = `성공! [${CARD_TYPES[reqType].name}] 날씨가 결정되었습니다.`;
+                    log(msg, 'success');
+                    winners = matchPlayers;
+                    scoreGain = 1;
+                    if (gameState.currentStatus === 'HOT' && reqType === 'WIND') scoreGain++;
+                    if (gameState.currentStatus === 'HUMID' && reqType === 'SUN') scoreGain++;
+                    if (gameState.currentStatus === 'COLD' && reqType === 'SUN') scoreGain++;
+                    if (gameState.currentStatus === 'SCARY') scoreGain++;
+                    
+                    if (reqType === 'SUN') nextStatus = 'HOT';
+                    if (reqType === 'RAIN') nextStatus = 'HUMID';
+                    if (reqType === 'WIND') nextStatus = 'COLD';
+                    botReact('WIN');
+                } else {
+                    SFX.LOSE();
+                    msg = "실패... 의견이 모이지 않았습니다.";
+                    log(msg);
+                    nextStatus = 'NORMAL';
+                    botReact('LOSE');
+                }
+            } else if (leaderCardType === 'HYBRID') {
+                const ingredients = leaderPlay.card.subType;
+                const hasIng1 = followersPlay.some(p => p.card.type === ingredients[0] || (p.card.type === 'HYBRID' && p.card.subType.includes(ingredients[0])));
+                const hasIng2 = followersPlay.some(p => p.card.type === ingredients[1] || (p.card.type === 'HYBRID' && p.card.subType.includes(ingredients[1])));
+
+                if (hasIng1 && hasIng2) {
+                    SFX.WIN();
+                    msg = `대성공! 희귀한 [${leaderPlay.card.name}]가 내립니다!`;
+                    log(msg, 'success');
+                    winners = gameState.players.map(p => p.id);
+                    scoreGain = 1;
+                    nextStatus = 'NORMAL';
+                    botReact('WIN');
+                } else {
+                    SFX.LOSE();
+                    msg = `실패... 재료가 부족합니다.`;
+                    log(msg);
+                    nextStatus = 'NORMAL';
+                    botReact('LOSE');
+                }
+            }
+        }
+
+        winners.forEach(pid => gameState.players[pid].score += scoreGain);
+        document.getElementById('center-message').innerText = msg;
+        gameState.currentStatus = nextStatus;
+        updateUI();
+
+        return { effectiveTypes };
+    }
+
+    function endGame() {
+        const sorted = [...gameState.players].sort((a, b) => b.score - a.score);
+        const winner = sorted[0];
+        alert(`🏆 우승: ${winner.name} (${winner.score}점)\n\n게임을 다시 시작합니다.`);
+        location.reload();
+    }
+
+    /* === 튜토리얼 로직 === */
+    function runTutorial() {
+        const overlay = document.getElementById('tutorial-overlay');
+        const msgBox = document.getElementById('tutorial-msg');
+        overlay.style.display = 'block';
+
+        function showMsg(text, targetId = null, nextCallback) {
+            msgBox.innerHTML = `${text}<br><br><button id='tuto-next'>다음</button>`;
+            
+            if(targetId) {
+                const target = document.getElementById(targetId);
+                target.classList.add('highlight');
+                msgBox.style.top = '50%'; msgBox.style.left = '50%';
+                msgBox.style.transform = 'translate(-50%, -50%)';
+            } else {
+                msgBox.style.top = '50%'; msgBox.style.left = '50%';
+                msgBox.style.transform = 'translate(-50%, -50%)';
+            }
+
+            document.getElementById('tuto-next').onclick = () => {
+                SFX.CLICK();
+                if(targetId) document.getElementById(targetId).classList.remove('highlight');
+                nextCallback();
+            };
+        }
+
+        if(tutorialStep === 0) {
+            showMsg("환영합니다! 날씨 요정이 되어 최고의 날씨를 만들어보세요.", null, () => {
+                tutorialStep = 1;
+                runTutorial();
+            });
+        } else if(tutorialStep === 1) {
+            gameState.players[0].hand = [
+                { type: 'SUN', name: '해' },
+                { type: 'HYBRID', subType: ['SUN', 'RAIN'], name: '여우비', unsafe: false },
+                { type: 'LIGHTNING', name: '번개' }
+            ];
+            updateUI();
+            showMsg("이곳은 당신의 패입니다.<br>복합 카드는 구성 요소가 작게 표시됩니다.", 'my-hand', () => {
+                tutorialStep = 2;
+                runTutorial();
+            });
+        } else if(tutorialStep === 2) {
+            gameState.phase = 'LEADER_ACT';
+            gameState.leaderIndex = 0;
+            updateUI();
+            overlay.style.display = 'none';
+            msgBox.innerHTML = "당신은 이번 턴의 <b>리더</b>입니다.<br>'해' 카드를 선택해서 내보세요.<br>(화면 중앙 상단에 힌트가 뜹니다)";
+            
+            const hint = document.createElement('div');
+            hint.id = 'tuto-hint';
+            hint.style.position = 'absolute';
+            hint.style.top = '20%'; hint.style.left = '50%'; hint.style.transform = 'translateX(-50%)';
+            hint.style.background = 'white'; hint.style.border = '2px solid red'; hint.style.padding = '10px';
+            hint.style.zIndex = 200; hint.innerText = "👇 '해' 카드를 누르고 '카드 내기'를 클릭하세요!";
+            document.body.appendChild(hint);
+        } else if(tutorialStep === 3) {
+            const hint = document.getElementById('tuto-hint');
+            if(hint) hint.remove();
+            
+            showMsg("잘했습니다! 리더는 원하는 날씨를 선언할 수 있습니다.<br>이제 봇들이 카드를 낼 것입니다.", null, () => {
+                overlay.style.display = 'none';
+                setTimeout(() => {
+                    playCardAction(1, 0);
+                    setTimeout(() => {
+                        playCardAction(2, 0);
+                        setTimeout(() => {
+                            playCardAction(3, 0);
+                            const nextBtn = document.getElementById('btn-next');
+                            nextBtn.innerText = "결과 확인 (튜토리얼 종료)";
+                            nextBtn.onclick = nextPhase;
+                        }, 800);
+                    }, 800);
+                }, 800);
+            });
+        }
+    }
+
+</script>
+
+</body>
+</html>
