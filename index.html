@@ -6,8 +6,7 @@
     <title>오늘의 날씨 - 보드게임</title>
     <style>
         :root {
-            /* 배경색을 다시 밝은 톤으로 변경 */
-            --bg-color: #f0f2f5;
+            --bg-color: #f0f2f5; /* 밝은 배경 유지 */
             --card-sun: #ff9f43;
             --card-rain: #54a0ff;
             --card-wind: #1dd1a1;
@@ -22,18 +21,15 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            /* 모바일 주소창 대응을 위한 높이 설정 */
-            height: 100vh; 
-            height: 100dvh; 
+            height: 100vh;
+            height: 100dvh; /* 모바일 높이 대응 */
             overflow: hidden;
             user-select: none;
         }
 
-        /* 반응형 컨테이너 */
         #scaler {
             transform-origin: center center;
             transition: transform 0.2s;
-            /* 그림자도 조금 더 부드럽게 */
             box-shadow: 0 20px 50px rgba(0,0,0,0.1);
         }
 
@@ -75,7 +71,6 @@
             padding: 0 30px; background: #eee; font-weight: bold; font-size: 18px;
         }
 
-        /* 보드 영역 */
         #board-area {
             grid-column: 1 / 2; grid-row: 2 / 3;
             position: relative; background-color: #fff;
@@ -102,7 +97,6 @@
             gap: 20px; position: relative;
         }
 
-        /* 카드 스타일 */
         .card {
             width: 80px; height: 120px;
             border: 3px solid #000; border-radius: 8px;
@@ -804,6 +798,11 @@
         const myCard = gameState.players[0].hand[selectedHandIndex];
 
         if (gameState.phase === 'LEADER_ACT') {
+            // 리더는 순수 번개 카드를 낼 수 없음
+            if (myCard.type === 'LIGHTNING') {
+                alert("🚫 리더는 번개 카드를 낼 수 없습니다!\n(날씨를 제안해야 합니다)");
+                return;
+            }
             openDeclarationModal(myCard);
         } else {
             playCardAction(0, selectedHandIndex);
@@ -825,9 +824,14 @@
         choicesDiv.innerHTML = '';
 
         let options = [];
-        if (card.type === 'HYBRID') options = card.subType;
+        if (card.type === 'HYBRID') options = [...card.subType]; // 복사
         else if (card.type === 'LIGHTNING') options = ['SUN', 'RAIN', 'WIND'];
         else options = [card.type];
+
+        // 리더일 경우, 하이브리드 카드에서 번개 옵션 제거
+        if (gameState.phase === 'LEADER_ACT') {
+            options = options.filter(type => type !== 'LIGHTNING');
+        }
 
         options.forEach(type => {
             const btn = document.createElement('button');
